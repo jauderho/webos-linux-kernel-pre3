@@ -1,0 +1,4 @@
+I wish to thank Francesco Allertsen for porting the previous version of
+bfq to 2.6.33 and for running several preliminary tests. I thank also
+Mauro Andreolini for its technical help, which spared me several
+debugging nightmares.
