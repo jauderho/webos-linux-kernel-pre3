@@ -52,6 +52,8 @@ static struct swap_list_t swap_list = {-1, -1};
 static struct swap_info_struct swap_info[MAX_SWAPFILES];
 
 static DEFINE_MUTEX(swapon_mutex);
+static BLOCKING_NOTIFIER_HEAD(swapon_notify_list);
+static BLOCKING_NOTIFIER_HEAD(swapoff_notify_list);
 
 /* For reference count accounting in swap_map */
 /* enum for swap_map[] handling. internal use only */
@@ -585,6 +587,8 @@ static int swap_entry_free(struct swap_info_struct *p,
 			swap_list.next = p - swap_info;
 		nr_swap_pages++;
 		p->inuse_pages--;
+		atomic_notifier_call_chain(&p->slot_free_notify_list,
+					offset, p->swap_file);
 	}
 	if (!swap_count(count))
 		mem_cgroup_uncharge_swap(ent);
@@ -2218,3 +2222,61 @@ int valid_swaphandles(swp_entry_t entry, unsigned long *offset)
 	*offset = ++toff;
 	return nr_pages? ++nr_pages: 0;
 }
+
+int register_swap_event_notifier(struct notifier_block *nb,
+				enum swap_event event, unsigned long val)
+{
+	switch (event) {
+	case SWAP_EVENT_SWAPON:
+		return blocking_notifier_chain_register(
+					&swapon_notify_list, nb);
+	case SWAP_EVENT_SWAPOFF:
+		return blocking_notifier_chain_register(
+					&swapoff_notify_list, nb);
+	case SWAP_EVENT_SLOT_FREE:
+		{
+		struct swap_info_struct *sis;
+
+		if (val > nr_swapfiles)
+			goto out;
+		sis = get_swap_info_struct(val);
+		return atomic_notifier_chain_register(
+				&sis->slot_free_notify_list, nb);
+		}
+	default:
+		pr_err("Invalid swap event: %d\n", event);
+	};
+
+out:
+	return -EINVAL;
+}
+EXPORT_SYMBOL_GPL(register_swap_event_notifier);
+
+int unregister_swap_event_notifier(struct notifier_block *nb,
+				enum swap_event event, unsigned long val)
+{
+	switch (event) {
+	case SWAP_EVENT_SWAPON:
+		return blocking_notifier_chain_unregister(
+					&swapon_notify_list, nb);
+	case SWAP_EVENT_SWAPOFF:
+		return blocking_notifier_chain_unregister(
+					&swapoff_notify_list, nb);
+	case SWAP_EVENT_SLOT_FREE:
+		{
+		struct swap_info_struct *sis;
+
+		if (val > nr_swapfiles)
+			goto out;
+		sis = get_swap_info_struct(val);
+		return atomic_notifier_chain_unregister(
+				&sis->slot_free_notify_list, nb);
+		}
+	default:
+		pr_err("Invalid swap event: %d\n", event);
+	};
+
+out:
+	return -EINVAL;
+}
+EXPORT_SYMBOL_GPL(unregister_swap_event_notifier);

@@ -149,6 +149,12 @@ enum {
 	SWP_SCANNING	= (1 << 8),	/* refcount in scan_swap_map */
 };
 
+enum swap_event {
+	SWAP_EVENT_SWAPON,
+	SWAP_EVENT_SWAPOFF,
+	SWAP_EVENT_SLOT_FREE,
+};
+
 #define SWAP_CLUSTER_MAX 32
 
 #define SWAP_MAP_MAX	0x7ffe
@@ -166,6 +172,7 @@ struct swap_info_struct {
 	struct block_device *bdev;
 	struct list_head extent_list;
 	struct swap_extent *curr_swap_extent;
+	struct atomic_notifier_head slot_free_notify_list;
 	unsigned short *swap_map;
 	unsigned int lowest_bit;
 	unsigned int highest_bit;
@@ -322,6 +329,10 @@ extern sector_t swapdev_block(int, pgoff_t);
 extern struct swap_info_struct *get_swap_info_struct(unsigned);
 extern int reuse_swap_page(struct page *);
 extern int try_to_free_swap(struct page *);
+extern int register_swap_event_notifier(struct notifier_block *nb,
+                       enum swap_event event, unsigned long val);
+extern int unregister_swap_event_notifier(struct notifier_block *nb,
+                       enum swap_event event, unsigned long val);
 struct backing_dev_info;
 
 /* linux/mm/thrash.c */
